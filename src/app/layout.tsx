@@ -9,6 +9,9 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Quickslip - Digital Receipt Generator",
   description: "Generate professional receipts, track income, and export summaries.",
+  icons: {
+    icon: '/favicon.png',
+  },
 };
 
 export default function RootLayout({
