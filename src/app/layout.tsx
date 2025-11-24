@@ -31,8 +31,8 @@ export default function RootLayout({
         }
       }}
     >
-      <html lang="en" className="dark">
-        <body className={`${inter.className} bg-black text-zinc-400 antialiased selection:bg-brand-500/30 selection:text-brand-200`}>
+      <html lang="en" className="dark" suppressHydrationWarning>
+        <body className={inter.className} suppressHydrationWarning>
           {children}
         </body>
       </html>
