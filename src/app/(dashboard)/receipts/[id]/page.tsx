@@ -12,6 +12,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
         .from('receipts')
         .select('*')
         .eq('id', id)
+        .is('deleted_at', null)
         .single();
 
     if (!receipt) {

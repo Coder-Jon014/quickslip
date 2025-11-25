@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { Icon } from "@/components/ui/icon";
 import { useRouter } from "next/navigation";
 import { createClerkSupabaseClient } from "@/lib/supabase/client";
@@ -20,41 +20,72 @@ interface Client {
     email: string;
 }
 
-export default function NewReceiptPage() {
+export default function EditReceiptPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
     const { getToken, userId } = useAuth();
-    const [loading, setLoading] = useState(false);
+    const { id } = use(params);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const [clients, setClients] = useState<Client[]>([]);
 
     const [formData, setFormData] = useState({
-        receiptNumber: `REC-${Math.floor(Math.random() * 10000)}`,
+        receiptNumber: "",
         clientId: "",
         clientName: "",
         clientEmail: "",
-        issuedDate: new Date().toISOString().split('T')[0],
-        paymentMethod: "Bank Transfer",
+        issuedDate: "",
+        paymentMethod: "",
         notes: "",
         status: "draft"
     });
 
-    const [items, setItems] = useState<LineItem[]>([
-        { id: '1', description: "", quantity: 1, rate: 0, amount: 0 }
-    ]);
+    const [items, setItems] = useState<LineItem[]>([]);
 
     useEffect(() => {
-        const fetchClients = async () => {
-            if (!userId) return;
+        const fetchData = async () => {
             try {
                 const token = await getToken({ template: 'supabase' });
                 const supabase = createClerkSupabaseClient(token!);
-                const { data } = await supabase.from('clients').select('id, name, email').order('name');
-                if (data) setClients(data);
+
+                // Fetch clients
+                const { data: clientsData } = await supabase.from('clients').select('id, name, email').order('name');
+                if (clientsData) setClients(clientsData);
+
+                // Fetch receipt
+                const { data, error } = await supabase
+                    .from('receipts')
+                    .select('*')
+                    .eq('id', id)
+                    .single();
+
+                if (error) throw error;
+                if (!data) throw new Error("Receipt not found");
+
+                setFormData({
+                    receiptNumber: data.receipt_number,
+                    clientId: data.client_id || "",
+                    clientName: data.client_name,
+                    clientEmail: data.client_email || "",
+                    issuedDate: data.issued_date,
+                    paymentMethod: data.payment_method || "",
+                    notes: data.notes || "",
+                    status: data.status
+                });
+
+                setItems(data.items || []);
             } catch (error) {
-                console.error("Error fetching clients:", error);
+                console.error("Error fetching data:", error);
+                alert("Failed to load data");
+                router.push('/receipts');
+            } finally {
+                setLoading(false);
             }
         };
-        fetchClients();
-    }, [userId, getToken]);
+
+        if (userId) {
+            fetchData();
+        }
+    }, [id, userId, getToken, router]);
 
     const handleClientSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const selectedId = e.target.value;
@@ -73,9 +104,9 @@ export default function NewReceiptPage() {
         }
     };
 
-    const updateItem = (id: string, field: keyof LineItem, value: string | number) => {
+    const updateItem = (itemId: string, field: keyof LineItem, value: string | number) => {
         setItems(items.map(item => {
-            if (item.id === id) {
+            if (item.id === itemId) {
                 const updated = { ...item, [field]: value };
                 if (field === 'quantity' || field === 'rate') {
                     updated.amount = Number(updated.quantity) * Number(updated.rate);
@@ -90,8 +121,8 @@ export default function NewReceiptPage() {
         setItems([...items, { id: Math.random().toString(), description: "", quantity: 1, rate: 0, amount: 0 }]);
     };
 
-    const removeItem = (id: string) => {
-        setItems(items.filter(item => item.id !== id));
+    const removeItem = (itemId: string) => {
+        setItems(items.filter(item => item.id !== itemId));
     };
 
     const subtotal = items.reduce((sum, item) => sum + item.amount, 0);
@@ -100,7 +131,7 @@ export default function NewReceiptPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setLoading(true);
+        setSaving(true);
 
         try {
             const token = await getToken({ template: 'supabase' });
@@ -108,54 +139,50 @@ export default function NewReceiptPage() {
 
             const supabase = createClerkSupabaseClient(token);
 
-            // Ensure user record exists
-            const { data: userRecord } = await supabase.from('users').select('clerk_id').eq('clerk_id', userId).single();
-
-            if (!userRecord && userId) {
-                await supabase.from('users').insert({
-                    clerk_id: userId,
-                    email: "",
-                    full_name: ""
-                });
-            }
-
-            const { error } = await supabase.from('receipts').insert({
-                user_id: userId,
-                receipt_number: formData.receiptNumber,
-                client_id: formData.clientId || null,
-                client_name: formData.clientName,
-                client_email: formData.clientEmail,
-                items: items,
-                subtotal,
-                tax,
-                total,
-                payment_method: formData.paymentMethod,
-                notes: formData.notes,
-                status: formData.status,
-                issued_date: formData.issuedDate
-            });
+            const { error } = await supabase
+                .from('receipts')
+                .update({
+                    receipt_number: formData.receiptNumber,
+                    client_id: formData.clientId || null,
+                    client_name: formData.clientName,
+                    client_email: formData.clientEmail,
+                    items: items,
+                    subtotal,
+                    tax,
+                    total,
+                    payment_method: formData.paymentMethod,
+                    notes: formData.notes,
+                    status: formData.status,
+                    issued_date: formData.issuedDate,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', id);
 
             if (error) throw error;
 
-            router.push('/dashboard');
+            router.push(`/receipts/${id}`);
             router.refresh();
 
         } catch (error) {
-            console.error("Error creating receipt:", error);
-            alert("Failed to create receipt");
+            console.error("Error updating receipt:", error);
+            alert("Failed to update receipt");
         } finally {
-            setLoading(false);
+            setSaving(false);
         }
     };
+
+    if (loading) {
+        return <div className="text-white">Loading...</div>;
+    }
 
     return (
         <div className="max-w-4xl mx-auto">
             <div className="flex items-center justify-between mb-8">
                 <div>
-                    <Link href="/dashboard" className="text-zinc-500 hover:text-white text-sm flex items-center gap-1 mb-2">
-                        <Icon icon="solar:arrow-left-linear" /> Back to Dashboard
+                    <Link href={`/receipts/${id}`} className="text-zinc-500 hover:text-white text-sm flex items-center gap-1 mb-2">
+                        <Icon icon="solar:arrow-left-linear" /> Back to Receipt
                     </Link>
-                    <h1 className="text-2xl font-semibold text-white">Create New Receipt</h1>
+                    <h1 className="text-2xl font-semibold text-white">Edit Receipt</h1>
                 </div>
             </div>
 
@@ -328,15 +355,15 @@ export default function NewReceiptPage() {
 
                 {/* Actions */}
                 <div className="flex justify-end gap-4">
-                    <Link href="/dashboard" className="px-6 py-3 rounded-lg text-sm font-medium text-zinc-400 hover:text-white transition-colors">
+                    <Link href={`/receipts/${id}`} className="px-6 py-3 rounded-lg text-sm font-medium text-zinc-400 hover:text-white transition-colors">
                         Cancel
                     </Link>
                     <button
                         type="submit"
-                        disabled={loading}
+                        disabled={saving}
                         className="bg-brand-400 hover:bg-brand-300 text-black px-8 py-3 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                     >
-                        {loading ? 'Saving...' : 'Create Receipt'}
+                        {saving ? 'Saving...' : 'Save Changes'}
                     </button>
                 </div>
             </form>

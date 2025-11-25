@@ -10,6 +10,7 @@ export default async function ReceiptsPage() {
     const { data: receipts } = await supabase
         .from('receipts')
         .select('*')
+        .is('deleted_at', null)
         .order('created_at', { ascending: false });
 
     return (
@@ -47,8 +48,8 @@ export default async function ReceiptsPage() {
                                         <td className="px-6 py-4 text-white">${receipt.total}</td>
                                         <td className="px-6 py-4">
                                             <span className={`px-2 py-1 rounded text-xs font-medium ${receipt.status === 'paid' ? 'bg-brand-500/10 text-brand-400' :
-                                                    receipt.status === 'sent' ? 'bg-blue-500/10 text-blue-400' :
-                                                        'bg-zinc-800 text-zinc-400'
+                                                receipt.status === 'sent' ? 'bg-blue-500/10 text-blue-400' :
+                                                    'bg-zinc-800 text-zinc-400'
                                                 }`}>
                                                 {receipt.status}
                                             </span>

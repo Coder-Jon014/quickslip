@@ -2,8 +2,42 @@
 import { Icon } from "@/components/ui/icon";
 import Link from "next/link";
 import { generateReceiptPDF } from "@/lib/pdf/generator";
+import { createClerkSupabaseClient } from "@/lib/supabase/client";
+import { useAuth } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
-export function ReceiptView({ receipt }: { receipt: any }) {
+import { DbReceipt, ReceiptItem } from "@/types/db";
+
+export function ReceiptView({ receipt }: { receipt: DbReceipt }) {
+    const { getToken } = useAuth();
+    const router = useRouter();
+    const [deleting, setDeleting] = useState(false);
+
+    const handleDelete = async () => {
+        if (!confirm("Are you sure you want to delete this receipt?")) return;
+        setDeleting(true);
+
+        try {
+            const token = await getToken({ template: 'supabase' });
+            const supabase = createClerkSupabaseClient(token!);
+
+            const { error } = await supabase
+                .from('receipts')
+                .update({ deleted_at: new Date().toISOString() })
+                .eq('id', receipt.id);
+
+            if (error) throw error;
+
+            router.push('/receipts');
+            router.refresh();
+        } catch (error) {
+            console.error("Error deleting receipt:", error);
+            alert("Failed to delete receipt");
+            setDeleting(false);
+        }
+    };
+
     return (
         <div className="max-w-4xl mx-auto">
             <div className="flex items-center justify-between mb-8">
@@ -14,6 +48,19 @@ export function ReceiptView({ receipt }: { receipt: any }) {
                     <h1 className="text-2xl font-semibold text-white">Receipt #{receipt.receipt_number}</h1>
                 </div>
                 <div className="flex gap-4">
+                    <Link
+                        href={`/receipts/${receipt.id}/edit`}
+                        className="bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                    >
+                        <Icon icon="solar:pen-bold-duotone" /> Edit
+                    </Link>
+                    <button
+                        onClick={handleDelete}
+                        disabled={deleting}
+                        className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                    >
+                        {deleting ? 'Deleting...' : <><Icon icon="solar:trash-bin-trash-bold-duotone" /> Delete</>}
+                    </button>
                     <button
                         onClick={() => generateReceiptPDF(receipt)}
                         className="bg-brand-400 hover:bg-brand-300 text-black px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
@@ -52,7 +99,7 @@ export function ReceiptView({ receipt }: { receipt: any }) {
                         </tr>
                     </thead>
                     <tbody>
-                        {receipt.items.map((item: any, i: number) => (
+                        {receipt.items.map((item: ReceiptItem, i: number) => (
                             <tr key={i} className="border-b border-gray-100">
                                 <td className="py-4">{item.description}</td>
                                 <td className="py-4 text-center">{item.quantity}</td>

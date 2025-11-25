@@ -11,6 +11,7 @@ export default async function DashboardPage() {
     const { data: receipts } = await supabase
         .from('receipts')
         .select('*')
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(5);
 
@@ -22,6 +23,20 @@ export default async function DashboardPage() {
         .limit(1);
 
     const currentWeekIncome = incomeData?.[0]?.total_income || 0;
+
+    // Fetch active clients (clients with receipts in last 90 days)
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+    const { data: activeClientsData } = await supabase
+        .from('receipts')
+        .select('client_id')
+        .gte('created_at', ninetyDaysAgo.toISOString())
+        .not('client_id', 'is', null)
+        .is('deleted_at', null);
+
+    // Count unique client_ids
+    const uniqueActiveClients = new Set(activeClientsData?.map(r => r.client_id)).size;
 
     return (
         <div className="space-y-8">
@@ -59,7 +74,7 @@ export default async function DashboardPage() {
                         </div>
                         <span className="text-zinc-400 text-sm font-medium">Active Clients</span>
                     </div>
-                    <div className="text-3xl font-semibold text-white">--</div>
+                    <div className="text-3xl font-semibold text-white">{uniqueActiveClients}</div>
                 </div>
             </div>
 
@@ -92,8 +107,8 @@ export default async function DashboardPage() {
                                             <td className="px-6 py-4 text-white">${receipt.total}</td>
                                             <td className="px-6 py-4">
                                                 <span className={`px-2 py-1 rounded text-xs font-medium ${receipt.status === 'paid' ? 'bg-brand-500/10 text-brand-400' :
-                                                        receipt.status === 'sent' ? 'bg-blue-500/10 text-blue-400' :
-                                                            'bg-zinc-800 text-zinc-400'
+                                                    receipt.status === 'sent' ? 'bg-blue-500/10 text-blue-400' :
+                                                        'bg-zinc-800 text-zinc-400'
                                                     }`}>
                                                     {receipt.status}
                                                 </span>

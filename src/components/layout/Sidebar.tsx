@@ -8,6 +8,7 @@ const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: "solar:home-smile-bold-duotone" },
     { name: "Create Receipt", href: "/receipts/new", icon: "solar:document-add-bold-duotone" },
     { name: "My Receipts", href: "/receipts", icon: "solar:documents-bold-duotone" },
+    { name: "Clients", href: "/clients", icon: "solar:users-group-rounded-bold-duotone" },
     { name: "Income Tracker", href: "/income", icon: "solar:chart-2-bold-duotone" },
     { name: "Export Data", href: "/export", icon: "solar:export-bold-duotone" },
 ];
