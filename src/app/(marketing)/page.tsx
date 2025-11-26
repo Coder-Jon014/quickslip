@@ -3,6 +3,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Icon } from "@iconify/react";
 import Link from "next/link";
+import { PricingTable } from "@/components/marketing/pricing-table";
 
 export default function LandingPage() {
     return (
@@ -158,6 +159,11 @@ export default function LandingPage() {
                             </div>
                         </div>
                     </div>
+                </section>
+
+                {/* Pricing Section */}
+                <section className="py-24 lg:py-32 bg-zinc-950/50 border-y border-white/5">
+                    <PricingTable />
                 </section>
 
                 {/* CTA */}

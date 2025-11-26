@@ -11,6 +11,7 @@ const navigation = [
     { name: "Clients", href: "/clients", icon: "solar:users-group-rounded-bold-duotone" },
     { name: "Income Tracker", href: "/income", icon: "solar:chart-2-bold-duotone" },
     { name: "Export Data", href: "/export", icon: "solar:export-bold-duotone" },
+    { name: "Settings", href: "/settings", icon: "solar:settings-bold-duotone" },
 ];
 
 export function Sidebar() {

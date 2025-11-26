@@ -87,17 +87,26 @@ const ReceiptDocument = ({ receipt }: { receipt: any }) => (
     </Document>
 );
 
+import { uploadFile } from '@/lib/s3';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+
 export async function POST(request: NextRequest) {
     try {
         const receipt = await request.json();
         const buffer = await renderToBuffer(<ReceiptDocument receipt={receipt} />);
 
-        return new NextResponse(buffer, {
-            headers: {
-                'Content-Type': 'application/pdf',
-                'Content-Disposition': `attachment; filename="Receipt-${receipt.receipt_number}.pdf"`,
-            },
-        });
+        // Upload to S3
+        const key = `quickslip/users/${receipt.user_id}/receipts/${receipt.id}.pdf`;
+        await uploadFile(key, buffer, 'application/pdf');
+
+        // Update database
+        const supabase = await createSupabaseServerClient();
+        await supabase
+            .from('receipts')
+            .update({ pdf_url: key })
+            .eq('id', receipt.id);
+
+        return NextResponse.json({ success: true, key });
     } catch (error) {
         console.error('PDF generation error:', error);
         return NextResponse.json({ error: 'Failed to generate PDF' }, { status: 500 });

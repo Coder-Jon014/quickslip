@@ -1,33 +1,84 @@
 "use client";
 import { Icon } from "@/components/ui/icon";
 import Link from "next/link";
-import { generateReceiptPDF } from "@/lib/pdf/generator";
 import { createClerkSupabaseClient } from "@/lib/supabase/client";
 import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-
 import { DbReceipt, ReceiptItem } from "@/types/db";
+import { UpgradeModal } from "@/components/ui/upgrade-modal";
+import { Tier } from "@/types/db";
 
-export function ReceiptView({ receipt }: { receipt: DbReceipt }) {
+export function ReceiptView({ receipt, userTier }: { receipt: DbReceipt, userTier: Tier }) {
     const { getToken } = useAuth();
     const router = useRouter();
     const [deleting, setDeleting] = useState(false);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [modalAction, setModalAction] = useState<"edit" | "delete">("edit");
+
+    const handleEditClick = (e: React.MouseEvent) => {
+        if (userTier === 'free') {
+            e.preventDefault();
+            setModalAction("edit");
+            setShowUpgradeModal(true);
+        }
+    };
+
+    const handleDeleteClick = () => {
+        if (userTier === 'free') {
+            setModalAction("delete");
+            setShowUpgradeModal(true);
+            return;
+        }
+        handleDelete();
+    };
+
+    const [downloading, setDownloading] = useState(false);
+
+    const handleDownload = async () => {
+        setDownloading(true);
+        try {
+            if (receipt.pdf_url) {
+                window.open(`/api/receipts/${receipt.id}/download`, '_blank');
+                setDownloading(false);
+                return;
+            }
+
+            // Generate if not exists
+            const response = await fetch('/api/generate-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(receipt)
+            });
+
+            if (!response.ok) throw new Error('Failed to generate PDF');
+
+            // Refresh to get the new pdf_url (optional, but good for UI consistency)
+            router.refresh();
+
+            // Open download link
+            window.open(`/api/receipts/${receipt.id}/download`, '_blank');
+
+        } catch (error) {
+            console.error("Error downloading PDF:", error);
+            alert("Failed to download PDF");
+        } finally {
+            setDownloading(false);
+        }
+    };
 
     const handleDelete = async () => {
         if (!confirm("Are you sure you want to delete this receipt?")) return;
         setDeleting(true);
 
         try {
-            const token = await getToken({ template: 'supabase' });
-            const supabase = createClerkSupabaseClient(token!);
+            const response = await fetch(`/api/receipts/${receipt.id}/delete`, {
+                method: 'DELETE',
+            });
 
-            const { error } = await supabase
-                .from('receipts')
-                .update({ deleted_at: new Date().toISOString() })
-                .eq('id', receipt.id);
-
-            if (error) throw error;
+            if (!response.ok) {
+                throw new Error('Failed to delete receipt');
+            }
 
             router.push('/receipts');
             router.refresh();
@@ -50,25 +101,42 @@ export function ReceiptView({ receipt }: { receipt: DbReceipt }) {
                 <div className="flex gap-4">
                     <Link
                         href={`/receipts/${receipt.id}/edit`}
-                        className="bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                        onClick={handleEditClick}
+                        className={`bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${userTier === 'free' ? 'opacity-75' : ''}`}
                     >
-                        <Icon icon="solar:pen-bold-duotone" /> Edit
+                        <Icon icon="solar:pen-bold-duotone" />
+                        {userTier === 'free' && <Icon icon="solar:lock-keyhole-bold-duotone" className="text-brand-400" />}
+                        Edit
                     </Link>
                     <button
-                        onClick={handleDelete}
+                        onClick={handleDeleteClick}
                         disabled={deleting}
-                        className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                        className={`bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${userTier === 'free' ? 'opacity-75' : ''}`}
                     >
-                        {deleting ? 'Deleting...' : <><Icon icon="solar:trash-bin-trash-bold-duotone" /> Delete</>}
+                        {deleting ? 'Deleting...' : (
+                            <>
+                                <Icon icon="solar:trash-bin-trash-bold-duotone" />
+                                {userTier === 'free' && <Icon icon="solar:lock-keyhole-bold-duotone" />}
+                                Delete
+                            </>
+                        )}
                     </button>
                     <button
-                        onClick={() => generateReceiptPDF(receipt)}
-                        className="bg-brand-400 hover:bg-brand-300 text-black px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                        onClick={handleDownload}
+                        disabled={downloading}
+                        className="bg-brand-400 hover:bg-brand-300 text-black px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
                     >
-                        <Icon icon="solar:download-minimalistic-bold-duotone" /> Download PDF
+                        {downloading ? 'Generating...' : <><Icon icon="solar:download-minimalistic-bold-duotone" /> Download PDF</>}
                     </button>
                 </div>
             </div>
+
+            <UpgradeModal
+                isOpen={showUpgradeModal}
+                onClose={() => setShowUpgradeModal(false)}
+                title={modalAction === 'edit' ? "Unlock Editing" : "Unlock Deleting"}
+                description={`Editing and deleting receipts is available on the Pro plan. Upgrade now to manage your receipts fully.`}
+            />
 
             {/* Receipt Preview UI */}
             <div className="bg-white text-black p-12 rounded-xl shadow-lg max-w-3xl mx-auto">

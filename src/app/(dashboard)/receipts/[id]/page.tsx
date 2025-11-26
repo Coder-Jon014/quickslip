@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { ReceiptView } from "./receipt-view";
 import { auth } from "@clerk/nextjs/server";
 
+import { getUserTier } from "@/lib/tier-utils";
+
 export default async function ReceiptPage({ params }: { params: Promise<{ id: string }> }) {
     const { userId } = await auth();
     const { id } = await params;
@@ -19,5 +21,7 @@ export default async function ReceiptPage({ params }: { params: Promise<{ id: st
         notFound();
     }
 
-    return <ReceiptView receipt={receipt} />;
+    const tier = userId ? await getUserTier(userId) : 'free';
+
+    return <ReceiptView receipt={receipt} userTier={tier} />;
 }

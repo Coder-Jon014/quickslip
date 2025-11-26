@@ -134,14 +134,12 @@ export default function EditReceiptPage({ params }: { params: Promise<{ id: stri
         setSaving(true);
 
         try {
-            const token = await getToken({ template: 'supabase' });
-            if (!token) throw new Error("No token");
-
-            const supabase = createClerkSupabaseClient(token);
-
-            const { error } = await supabase
-                .from('receipts')
-                .update({
+            const response = await fetch(`/api/receipts/${id}/update`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
                     receipt_number: formData.receiptNumber,
                     client_id: formData.clientId || null,
                     client_name: formData.clientName,
@@ -153,12 +151,19 @@ export default function EditReceiptPage({ params }: { params: Promise<{ id: stri
                     payment_method: formData.paymentMethod,
                     notes: formData.notes,
                     status: formData.status,
-                    issued_date: formData.issuedDate,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', id);
+                    issued_date: formData.issuedDate
+                }),
+            });
 
-            if (error) throw error;
+            if (!response.ok) {
+                const data = await response.json();
+                if (response.status === 403) {
+                    alert("Upgrade to Pro to edit receipts");
+                    router.push(`/receipts/${id}`);
+                    return;
+                }
+                throw new Error('Failed to update receipt');
+            }
 
             router.push(`/receipts/${id}`);
             router.refresh();

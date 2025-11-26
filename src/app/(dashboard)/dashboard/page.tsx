@@ -3,9 +3,15 @@ import { Icon } from "@/components/ui/icon";
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 
+import { getUserTier, getRecentReceiptCount, FREE_TIER_RECEIPT_LIMIT } from "@/lib/tier-utils";
+
 export default async function DashboardPage() {
     const { userId } = await auth();
     const supabase = await createSupabaseServerClient();
+
+    // Fetch user tier and usage
+    const tier = userId ? await getUserTier(userId) : 'free';
+    const recentReceiptCount = userId ? await getRecentReceiptCount(userId) : 0;
 
     // Fetch recent receipts
     const { data: receipts } = await supabase
@@ -44,6 +50,29 @@ export default async function DashboardPage() {
                 <h1 className="text-2xl font-semibold text-white">Dashboard</h1>
                 <p className="text-zinc-400">Welcome back, here's what's happening with your business.</p>
             </div>
+
+            {tier === 'free' && (
+                <div className="bg-zinc-900/50 border border-zinc-800 p-6 rounded-xl relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-brand-500"></div>
+                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <div>
+                            <h3 className="text-white font-medium mb-1">Free Plan Usage</h3>
+                            <p className="text-zinc-400 text-sm">
+                                You've used <span className="text-white font-medium">{recentReceiptCount}</span> of <span className="text-white font-medium">{FREE_TIER_RECEIPT_LIMIT}</span> receipts this month.
+                            </p>
+                        </div>
+                        <Link href="/#pricing" className="bg-brand-400 hover:bg-brand-300 text-black px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap">
+                            Upgrade to Pro
+                        </Link>
+                    </div>
+                    <div className="mt-4 w-full bg-zinc-800 rounded-full h-2">
+                        <div
+                            className={`h-2 rounded-full transition-all duration-500 ${recentReceiptCount >= FREE_TIER_RECEIPT_LIMIT ? 'bg-red-500' : 'bg-brand-500'}`}
+                            style={{ width: `${Math.min((recentReceiptCount / FREE_TIER_RECEIPT_LIMIT) * 100, 100)}%` }}
+                        ></div>
+                    </div>
+                </div>
+            )}
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

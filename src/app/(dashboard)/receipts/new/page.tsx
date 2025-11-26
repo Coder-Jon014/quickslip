@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClerkSupabaseClient } from "@/lib/supabase/client";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
+import { UpgradeModal } from "@/components/ui/upgrade-modal";
 
 interface LineItem {
     id: string;
@@ -98,44 +99,43 @@ export default function NewReceiptPage() {
     const tax = 0; // Simple for now
     const total = subtotal + tax;
 
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
 
         try {
-            const token = await getToken({ template: 'supabase' });
-            if (!token) throw new Error("No token");
-
-            const supabase = createClerkSupabaseClient(token);
-
-            // Ensure user record exists
-            const { data: userRecord } = await supabase.from('users').select('clerk_id').eq('clerk_id', userId).single();
-
-            if (!userRecord && userId) {
-                await supabase.from('users').insert({
-                    clerk_id: userId,
-                    email: "",
-                    full_name: ""
-                });
-            }
-
-            const { error } = await supabase.from('receipts').insert({
-                user_id: userId,
-                receipt_number: formData.receiptNumber,
-                client_id: formData.clientId || null,
-                client_name: formData.clientName,
-                client_email: formData.clientEmail,
-                items: items,
-                subtotal,
-                tax,
-                total,
-                payment_method: formData.paymentMethod,
-                notes: formData.notes,
-                status: formData.status,
-                issued_date: formData.issuedDate
+            const response = await fetch('/api/receipts/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    receipt_number: formData.receiptNumber,
+                    client_id: formData.clientId || null,
+                    client_name: formData.clientName,
+                    client_email: formData.clientEmail,
+                    items: items,
+                    subtotal,
+                    tax,
+                    total,
+                    payment_method: formData.paymentMethod,
+                    notes: formData.notes,
+                    status: formData.status,
+                    issued_date: formData.issuedDate
+                }),
             });
 
-            if (error) throw error;
+            if (!response.ok) {
+                const data = await response.json();
+                if (response.status === 403 && data.code === 'LIMIT_REACHED') {
+                    setShowUpgradeModal(true);
+                    setLoading(false);
+                    return;
+                }
+                throw new Error('Failed to create receipt');
+            }
 
             router.push('/dashboard');
             router.refresh();
@@ -340,6 +340,13 @@ export default function NewReceiptPage() {
                     </button>
                 </div>
             </form>
+
+            <UpgradeModal
+                isOpen={showUpgradeModal}
+                onClose={() => setShowUpgradeModal(false)}
+                title="Limit Reached"
+                description="You've reached the limit of 10 receipts per month on the Free plan. Upgrade to Pro to create unlimited receipts."
+            />
         </div>
     );
 }
